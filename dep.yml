@@ -1,0 +1,25 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: kube-gen-certs
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kube-gen-certs
+        tier: security
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: kube-gen-certs
+        image: docker.astuart.co:5000/kube-gen-certs
+        imagePullPolicy: Always
+        command: "/kube-gen-certs"
+        args:
+          - "-incluster"
+          - '-filepath="/zones/k8s-zones.astuart.co"'
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
