@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"regexp"
+	"strings"
 	"text/tabwriter"
 	"text/template"
 
@@ -28,6 +31,9 @@ const zoneTmpl = `; vim: set ft=bindzone :
 var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	filepath  = flag.String("filepath", "zones/k8s-zones.cluster.local", "File location for zone file")
+	command   = flag.String("command", "", "A command to run any time the zone file is updated")
+
+	spaceRE = regexp.MustCompile("[[:space:]]+")
 
 	ztpl = template.Must(template.New("bind9").Parse(zoneTmpl))
 )
@@ -56,11 +62,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := createBindFile(cli); err != nil {
-		log.Fatal("Bind file creation error ", err)
-	}
+	// if err := createBindFile(cli); err != nil {
+	// 	log.Fatal("Bind file creation error ", err)
+	// }
 
-	// log.Fatal(watchIng(cli))
+	log.Fatal(watchIng(cli))
 }
 
 type ing struct {
@@ -73,34 +79,28 @@ func (i ing) Error() string {
 }
 
 func createBindFile(c *unversioned.Client) error {
-	nss, err := c.Namespaces().List(api.ListOptions{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	ingresses := []entry{}
 
-	for _, ns := range nss.Items {
-		log.Println(ns.Name)
-		ings, err := c.Ingress(ns.Namespace).List(api.ListOptions{})
-		if err != nil {
-			return ing{entry: nil, orig: err}
+	ings, err := c.Ingress("").List(api.ListOptions{})
+	if err != nil {
+		return ing{entry: nil, orig: err}
+	}
+
+	for _, ing := range ings.Items {
+		log.Println(ing.Name)
+		ips := make([]string, len(ing.Status.LoadBalancer.Ingress))
+		for i := range ing.Status.LoadBalancer.Ingress {
+			ips[i] = ing.Status.LoadBalancer.Ingress[i].IP
 		}
 
-		for _, ing := range ings.Items {
-			ips := make([]string, len(ing.Status.LoadBalancer.Ingress))
-			for i := range ing.Status.LoadBalancer.Ingress {
-				ips[i] = ing.Status.LoadBalancer.Ingress[i].IP
-			}
-
-			for _, rule := range ing.Spec.Rules {
-				ingresses = append(ingresses, entry{
-					Name:       rule.Host,
-					IngressIPs: ips,
-				})
-			}
+		for _, rule := range ing.Spec.Rules {
+			ingresses = append(ingresses, entry{
+				Name:       rule.Host,
+				IngressIPs: ips,
+			})
 		}
 	}
+	log.Println()
 
 	f, err := os.OpenFile(*filepath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0640)
 	if err != nil {
@@ -138,6 +138,28 @@ func watchIng(cli *unversioned.Client) error {
 			}
 
 			err = createBindFile(cli)
+			if err != nil {
+				return err
+			}
+
+			if *command != "" {
+				s := spaceRE.Split(strings.Trim(*command, `"`), -1)
+				log.Println(s, len(s))
+				cmd := exec.Command(s[0], s[1:]...)
+
+				out, err := cmd.Output()
+				os.Stdout.Write(out)
+				if err != nil {
+
+					switch err := err.(type) {
+					case *exec.ExitError:
+						fmt.Fprintf(os.Stderr, "After %s, pid %d exited with success: '%t', and stderr:\n", err.UserTime(), err.Pid(), err.Success())
+						os.Stderr.Write(err.Stderr)
+					default:
+						fmt.Fprintf(os.Stderr, "Encountered an unknown error: %s\n", err)
+					}
+				}
+			}
 		}
 
 		log.Println("Result channel closed. Starting again.")

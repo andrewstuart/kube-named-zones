@@ -1,13 +1,16 @@
 REG=docker.astuart.co:5000
-IMAGE=kube-named-zones
+BINARY?=kube-named-zones
+IMAGE:=$(BINARY)
 
 .PHONY: build push deploy
 
 TAG=$(REG)/$(IMAGE)
 
-build:
-	go build
+$(IMAGE): *.go
+	go build -o $(IMAGE)
 	upx $(IMAGE)
+	
+build: $(IMAGE)
 	docker build -t $(TAG) .
 
 push: build
