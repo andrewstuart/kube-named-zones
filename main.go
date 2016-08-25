@@ -32,6 +32,7 @@ var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	filepath  = flag.String("filepath", "zones/k8s-zones.cluster.local", "File location for zone file")
 	command   = flag.String("command", "", "A command to run any time the zone file is updated")
+	suffix    = flag.String("suffix", "astuart.co", "The DNS suffix")
 
 	spaceRE = regexp.MustCompile("[[:space:]]+")
 
@@ -88,14 +89,20 @@ func createBindFile(c *unversioned.Client) error {
 
 	for _, ing := range ings.Items {
 		log.Println(ing.Name)
+
 		ips := make([]string, len(ing.Status.LoadBalancer.Ingress))
 		for i := range ing.Status.LoadBalancer.Ingress {
 			ips[i] = ing.Status.LoadBalancer.Ingress[i].IP
 		}
 
 		for _, rule := range ing.Spec.Rules {
+			host := rule.Host
+			if strings.Contains(host, *suffix) && len(host) > len(*suffix)+1 {
+				host = host[:len(host)-1-len(*suffix)]
+			}
+
 			ingresses = append(ingresses, entry{
-				Name:       rule.Host,
+				Name:       host,
 				IngressIPs: ips,
 			})
 		}
@@ -114,7 +121,10 @@ func createBindFile(c *unversioned.Client) error {
 		return err
 	}
 
-	tw.Flush()
+	err = tw.Flush()
+	if err != nil {
+		return err
+	}
 
 	err = f.Close()
 	if err != nil {
