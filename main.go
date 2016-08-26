@@ -19,12 +19,12 @@ import (
 
 type entry struct {
 	Name       string
-	IngressIPs []string
+	IngressIPs map[string]struct{}
 }
 
 const zoneTmpl = `; vim: set ft=bindzone :
 
-` + "{{ range $zone := .ingresses }}{{ $zone.Name }}{{ range $ip := $zone.IngressIPs }}\tIN\tA\t{{ $ip }}" + `
+` + "{{ range $zone := .ingresses }}{{ $zone.Name }}{{ range $ip, $_ := $zone.IngressIPs }}\tIN\tA\t{{ $ip }}" + `
 {{end}}
 {{end}}`
 
@@ -80,7 +80,7 @@ func (i ing) Error() string {
 }
 
 func createBindFile(c *unversioned.Client) error {
-	ingresses := []entry{}
+	ingresses := map[string]*entry{}
 
 	ings, err := c.Ingress("").List(api.ListOptions{})
 	if err != nil {
@@ -90,21 +90,41 @@ func createBindFile(c *unversioned.Client) error {
 	for _, ing := range ings.Items {
 		log.Println(ing.Name)
 
-		ips := make([]string, len(ing.Status.LoadBalancer.Ingress))
+		ips := make(map[string]struct{}, len(ing.Status.LoadBalancer.Ingress))
 		for i := range ing.Status.LoadBalancer.Ingress {
-			ips[i] = ing.Status.LoadBalancer.Ingress[i].IP
+			ips[ing.Status.LoadBalancer.Ingress[i].IP] = struct{}{}
 		}
 
 		for _, rule := range ing.Spec.Rules {
 			host := rule.Host
 			if strings.Contains(host, *suffix) && len(host) > len(*suffix)+1 {
-				host = host[:len(host)-1-len(*suffix)]
+				sfx := strings.Split(*suffix, ".")
+				hst := strings.Split(host, ".")
+
+				for len(sfx) > 0 && len(hst) > 0 && sfx[len(sfx)-1] == hst[len(hst)-1] {
+					log.Println(sfx, hst)
+					sfx, hst = sfx[:len(sfx)-1], hst[:len(hst)-1]
+				}
+				host = strings.Join(hst, ".")
+				log.Println(host)
 			}
 
-			ingresses = append(ingresses, entry{
+			if host == "" {
+				log.Printf("Not adding empty host entry for ingress %s (was %s and suffix was %s)\n", ing.Name, rule.Host, *suffix)
+				continue
+			}
+
+			if ing, ok := ingresses[host]; ok {
+				for k := range ips {
+					ing.IngressIPs[k] = struct{}{}
+				}
+				continue
+			}
+
+			ingresses[host] = &entry{
 				Name:       host,
 				IngressIPs: ips,
-			})
+			}
 		}
 	}
 	log.Println()
