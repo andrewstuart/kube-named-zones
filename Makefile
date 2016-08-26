@@ -6,11 +6,7 @@ IMAGE:=$(BINARY)
 
 TAG=$(REG)/$(IMAGE)
 
-$(IMAGE): *.go
-	go build -o $(IMAGE)
-	upx $(IMAGE)
-	
-build: $(IMAGE)
+build:
 	docker build -t $(TAG) .
 
 push: build
