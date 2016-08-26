@@ -32,9 +32,9 @@ var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	once      = flag.Bool("once", false, "Write the file and then exit; do not watch for ingress changes")
 	filepath  = flag.String("filepath", "zones/k8s-zones.cluster.local", "File location for zone file")
-	command   = flag.String("command", "", "A command to run any time the zone file is updated")
-	kubeHost  = flag.String("host", "", "The kubernetes API host")
-	suffix    = flag.String("suffix", "", "The DNS suffix")
+	command   = flag.String("command", "", "A command string to run any time the zone file is updated, useful for `rndc`")
+	kubeHost  = flag.String("host", "", "The kubernetes API host; required if not run in-cluster")
+	suffix    = flag.String("suffix", "", "The DNS suffix -- the controller will strip this from the end of ingress Host values if present")
 
 	spaceRE = regexp.MustCompile("[[:space:]]+")
 	ztpl    = template.Must(template.New("bind9").Parse(zoneTmpl))
