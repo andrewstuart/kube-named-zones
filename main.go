@@ -30,13 +30,14 @@ const zoneTmpl = `; vim: set ft=bindzone :
 
 var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
+	once      = flag.Bool("once", false, "Write the file and then exit; do not watch for ingress changes")
 	filepath  = flag.String("filepath", "zones/k8s-zones.cluster.local", "File location for zone file")
 	command   = flag.String("command", "", "A command to run any time the zone file is updated")
-	suffix    = flag.String("suffix", "astuart.co", "The DNS suffix")
+	kubeHost  = flag.String("host", "", "The kubernetes API host")
+	suffix    = flag.String("suffix", "", "The DNS suffix")
 
 	spaceRE = regexp.MustCompile("[[:space:]]+")
-
-	ztpl = template.Must(template.New("bind9").Parse(zoneTmpl))
+	ztpl    = template.Must(template.New("bind9").Parse(zoneTmpl))
 )
 
 func init() {
@@ -50,24 +51,30 @@ func main() {
 		var err error
 		config, err = restclient.InClusterConfig()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("Error getting in-cluster config: ", err)
 		}
 	} else {
+		if *kubeHost == "" {
+			flag.Usage()
+			log.Fatal("Must run with -incluster (inside a k8s cluster) or provide a kubernetes host via -host")
+		}
 		config = &restclient.Config{
-			Host: "http://desk.astuart.co:8080",
+			Host: *kubeHost,
 		}
 	}
 
 	cli, err := unversioned.New(config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error creating API client: ", err)
 	}
 
-	// if err := createBindFile(cli); err != nil {
-	// 	log.Fatal("Bind file creation error ", err)
-	// }
+	if !*once {
+		log.Fatal(watchIng(cli))
+	}
 
-	log.Fatal(watchIng(cli))
+	if err := createBindFile(cli); err != nil {
+		log.Fatal("Bind file creation error ", err)
+	}
 }
 
 type ing struct {

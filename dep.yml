@@ -13,13 +13,14 @@ spec:
       terminationGracePeriodSeconds: 0
       containers:
       - name: kube-gen-certs
-        image: docker.astuart.co:5000/kube-gen-certs
+        image: andrewstuart/kube-named-zones
         imagePullPolicy: Always
         command: "/kube-gen-certs"
         args:
           - "-incluster"
-          - '-filepath="/zones/k8s-zones.astuart.co"'
+          - "-suffix=astuart.co"
         resources:
-          requests:
+          requests: &r
             cpu: 100m
             memory: 200Mi
+          limits: *r

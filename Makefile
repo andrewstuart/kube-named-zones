@@ -1,4 +1,4 @@
-REG=docker.astuart.co:5000
+REG=andrewstuart
 BINARY?=kube-named-zones
 IMAGE:=$(BINARY)
 
