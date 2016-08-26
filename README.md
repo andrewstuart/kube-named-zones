@@ -1,4 +1,4 @@
-# Kube-named-zones
+# Kube-named-zones (700-MB image version)
 
 Bind9/named automatic zone file generation from kubernetes ingresses
 
