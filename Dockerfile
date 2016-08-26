@@ -1,12 +1,13 @@
-FROM golang
+# FROM golang
+# MAINTAINER Andrew Stuart <andrew.stuart2@gmail.com>
 
-MAINTAINER Andrew Stuart <andrew.stuart2@gmail.com>
-
-CMD /go/src/kube-named-zones
-
+FROM golang:onbuild
 RUN apt-get update && apt-get -y install bind9 dnsutils && apt-get clean && rm -rf /var/lib/apt/*
 
-ADD . /go
-RUN go get && chown -R 1000 .
+# RUN mkdir -p /go/src/kube-named-zones
+# WORKDIR /go/src/kube-named-zones
 
-USER 1000
+# CMD ["go-wrapper", "run"]
+
+# COPY . /go/src/kube-named-zones
+# RUN go-wrapper download && go-wrapper install
