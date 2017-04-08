@@ -3,13 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"text/tabwriter"
 	"text/template"
+
+	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/restclient"
@@ -24,7 +25,7 @@ type entry struct {
 
 const zoneTmpl = `; vim: set ft=bindzone :
 
-` + "{{ range $zone := .ingresses }}{{ $zone.Name }}{{ range $ip, $_ := $zone.IngressIPs }}\tIN\tA\t{{ $ip }}" + `
+` + "{{ range $zone := .ingresses }}{{ $zone.Name }}.{{ range $ip, $_ := $zone.IngressIPs }}\tIN\tA\t{{ $ip }}" + `
 {{end}}
 {{end}}`
 
@@ -51,12 +52,12 @@ func main() {
 		var err error
 		config, err = restclient.InClusterConfig()
 		if err != nil {
-			log.Fatal("Error getting in-cluster config: ", err)
+			glog.Fatal("Error getting in-cluster config: ", err)
 		}
 	} else {
 		if *kubeHost == "" {
 			flag.Usage()
-			log.Fatal("Must run with -incluster (inside a k8s cluster) or provide a kubernetes host via -host")
+			glog.Fatal("Must run with -incluster (inside a k8s cluster) or provide a kubernetes host via -host")
 		}
 		config = &restclient.Config{
 			Host: *kubeHost,
@@ -65,15 +66,15 @@ func main() {
 
 	cli, err := unversioned.New(config)
 	if err != nil {
-		log.Fatal("Error creating API client: ", err)
+		glog.Fatal("Error creating API client: ", err)
 	}
 
 	if !*once {
-		log.Fatal(watchIng(cli))
+		glog.Fatal(watchIng(cli))
 	}
 
 	if err := createBindFile(cli); err != nil {
-		log.Fatal("Bind file creation error ", err)
+		glog.Fatal("Bind file creation error ", err)
 	}
 }
 
@@ -95,7 +96,7 @@ func createBindFile(c *unversioned.Client) error {
 	}
 
 	for _, ing := range ings.Items {
-		log.Println(ing.Name)
+		glog.Info(ing.Name)
 
 		ips := make(map[string]struct{}, len(ing.Status.LoadBalancer.Ingress))
 		for i := range ing.Status.LoadBalancer.Ingress {
@@ -109,15 +110,15 @@ func createBindFile(c *unversioned.Client) error {
 				hst := strings.Split(host, ".")
 
 				for len(sfx) > 0 && len(hst) > 0 && sfx[len(sfx)-1] == hst[len(hst)-1] {
-					log.Println(sfx, hst)
+					glog.V(2).Info(sfx, hst)
 					sfx, hst = sfx[:len(sfx)-1], hst[:len(hst)-1]
 				}
 				host = strings.Join(hst, ".")
-				log.Println(host)
+				glog.V(2).Info(host)
 			}
 
 			if host == "" {
-				log.Printf("Not adding empty host entry for ingress %s (was %s and suffix was %s)\n", ing.Name, rule.Host, *suffix)
+				glog.V(2).Infof("Not adding empty host entry for ingress %s (was %s and suffix was %s)\n", ing.Name, rule.Host, *suffix)
 				continue
 			}
 
@@ -134,7 +135,6 @@ func createBindFile(c *unversioned.Client) error {
 			}
 		}
 	}
-	log.Println()
 
 	f, err := os.OpenFile(*filepath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0640)
 	if err != nil {
@@ -181,7 +181,7 @@ func watchIng(cli *unversioned.Client) error {
 
 			if *command != "" {
 				s := spaceRE.Split(strings.Trim(*command, `"`), -1)
-				log.Println(s, len(s))
+				glog.V(5).Info(s, len(s))
 				cmd := exec.Command(s[0], s[1:]...)
 
 				out, err := cmd.Output()
@@ -190,7 +190,7 @@ func watchIng(cli *unversioned.Client) error {
 
 					switch err := err.(type) {
 					case *exec.ExitError:
-						fmt.Fprintf(os.Stderr, "After %s, pid %d exited with success: '%t', and stderr:\n", err.UserTime(), err.Pid(), err.Success())
+						glog.V(3).Infof("After %s, pid %d exited with success: '%t', and stderr:\n", err.UserTime(), err.Pid(), err.Success())
 						os.Stderr.Write(err.Stderr)
 					default:
 						fmt.Fprintf(os.Stderr, "Encountered an unknown error: %s\n", err)
@@ -199,6 +199,6 @@ func watchIng(cli *unversioned.Client) error {
 			}
 		}
 
-		log.Println("Result channel closed. Starting again.")
+		glog.Warning("Result channel closed. Starting again.")
 	}
 }
