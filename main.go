@@ -77,7 +77,7 @@ func main() {
 		go signal.Notify(ch, syscall.SIGHUP)
 
 		go func() {
-			for _ := range ch {
+			for _ = range ch {
 				createBindFile(cli)
 			}
 		}()
