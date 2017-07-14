@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"text/template"
 
@@ -70,6 +72,16 @@ func main() {
 	}
 
 	if !*once {
+		// Listen to SIGHUP and rewrite
+		ch := make(chan os.Signal)
+		go signal.Notify(ch, syscall.SIGHUP)
+
+		go func() {
+			for _ := range ch {
+				createBindFile(cli)
+			}
+		}()
+
 		glog.Fatal(watchIng(cli))
 	}
 
